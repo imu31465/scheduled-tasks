@@ -1,0 +1,65 @@
+name: census
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      window:
+        description: "IDs to probe past the current max (0 = auto)"
+        required: false
+        default: "0"
+
+concurrency:
+  group: census
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone task sources (read-only deploy key)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
+            git@github.com:imu31465/bloxd-player-search.git src
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r src/requirements.txt
+
+      - name: Probe frontier
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        working-directory: src
+        run: |
+          WINDOW="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.window || '0' }}"
+          python tools/run_masked.py tools/update_frontier.py --window "$WINDOW" --workers 16
+
+      - name: Notify failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"❌ census job failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            > /dev/null
