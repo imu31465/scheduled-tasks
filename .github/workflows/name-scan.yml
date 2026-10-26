@@ -1,0 +1,53 @@
+name: name-scan
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: name-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Clone task sources (read-only deploy key)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
+            git@github.com:imu31465/bloxd-player-search.git src
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r src/requirements.txt
+
+      - name: Scan 4-char name availability
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        working-directory: src
+        run: python tools/run_masked.py tools/name_scan.py --notify
+
+      - name: Upload name lists
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-4char-${{ github.run_id }}
+          path: src/free_4char_*.txt*
+          if-no-files-found: ignore
