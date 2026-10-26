@@ -2,7 +2,10 @@ name: enrich
 
 on:
   schedule:
-    - cron: "37 1 */2 * *"
+    # Daily: probe 429 storms are per-runner-IP luck, so a failed or
+    # degraded run should retry on a fresh runner the next day instead of
+    # waiting two days (public runners are free).
+    - cron: "37 1 * * *"
   workflow_dispatch:
 
 concurrency:
