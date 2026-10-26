@@ -42,7 +42,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
         working-directory: src
-        run: python tools/run_masked.py tools/name_scan.py --notify
+        run: python tools/run_masked.py tools/name_scan.py --notify --debug
 
       - name: Upload name lists
         if: always()
