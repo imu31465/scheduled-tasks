@@ -49,6 +49,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
+      - name: Extract live SP token (bloxd.io redeploy rotation)
+        # The anti-bot 3PSIDMCSP token rotates on bloxd.io client redeploys
+        # (twice on 2026-10-27). Capture the current value from one real
+        # page load so the shards survive rotations without a manual token
+        # commit; on capture failure app.py falls back to its committed
+        # constant. The token itself is never printed (length only).
+        continue-on-error: true
+        working-directory: src
+        run: |
+          pip install --quiet playwright
+          SP=$(python tools/fetch_sp_token.py) || SP=""
+          if [ -n "$SP" ]; then
+            echo "live SP token captured (length ${#SP})"
+            echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
+          else
+            echo "SP token capture failed; using the committed fallback"
+          fi
+
       - name: Run shard
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
