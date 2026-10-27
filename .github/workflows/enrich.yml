@@ -41,6 +41,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
+      - name: Extract live SP token (bloxd.io redeploy rotation)
+        # Same rationale as sweep.yml: capture the current anti-bot
+        # 3PSIDMCSP from one real page load; fall back to the committed
+        # constant in app.py when the capture fails.
+        continue-on-error: true
+        working-directory: src
+        run: |
+          pip install --quiet playwright
+          SP=$(python tools/fetch_sp_token.py) || SP=""
+          if [ -n "$SP" ]; then
+            echo "live SP token captured (length ${#SP})"
+            echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
+          else
+            echo "SP token capture failed; using the committed fallback"
+          fi
+
       - name: Drip refresh
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
