@@ -7,6 +7,16 @@ on:
     # waiting two days (public runners are free).
     - cron: "37 1 * * *"
   workflow_dispatch:
+    inputs:
+      force_ids:
+        description: >-
+          Comma-separated player ids to social-fetch right now, bypassing
+          the A-gate skip rules - e.g. 3734 for a rename the cursor has not
+          wrapped around to yet. When set, only these ids are processed
+          (the regular 25k drip is skipped) and the stored cursor is not
+          moved.
+        required: false
+        default: ""
 
 concurrency:
   group: enrich
@@ -64,7 +74,17 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
         working-directory: src
-        run: python tools/run_masked.py tools/enrich_profiles.py --limit 25000
+        run: |
+          ARGS=(--limit 25000)
+          # Manual dispatch: optionally force-fetch specific player ids
+          # (rename hotfix). tr keeps digits and commas only, so a typo'd
+          # or pasted input can never smuggle shell syntax in here.
+          FORCE_IDS="$(printf '%s' "${{ inputs.force_ids }}" | tr -cd '0-9,')"
+          if [ -n "$FORCE_IDS" ]; then
+            echo "forced ids: $FORCE_IDS"
+            ARGS+=(--force-ids "$FORCE_IDS")
+          fi
+          python tools/run_masked.py tools/enrich_profiles.py "${ARGS[@]}"
 
       - name: Notify failure
         if: failure()
