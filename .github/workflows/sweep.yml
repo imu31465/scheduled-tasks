@@ -62,6 +62,7 @@ jobs:
           SP=$(python tools/fetch_sp_token.py) || SP=""
           if [ -n "$SP" ]; then
             echo "live SP token captured (length ${#SP})"
+            echo "::add-mask::$SP"
             echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
           else
             echo "SP token capture failed; using the committed fallback"
