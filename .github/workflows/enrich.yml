@@ -51,21 +51,26 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
-      - name: Extract live SP token (bloxd.io redeploy rotation)
-        # Same rationale as sweep.yml: capture the current anti-bot
-        # 3PSIDMCSP from one real page load; fall back to the committed
-        # constant in app.py when the capture fails.
+      - name: Resolve live SP token (bloxd.io redeploy rotation)
+        # Same rationale as sweep.yml: re-derive the anti-bot 3PSIDMCSP
+        # statically from the live JS bundle and validate it by minting;
+        # the Playwright browser capture only runs when that fails. app.py
+        # also derives on its own at import, so a total failure here is
+        # survivable.
         continue-on-error: true
         working-directory: src
         run: |
-          pip install --quiet playwright
-          SP=$(python tools/fetch_sp_token.py) || SP=""
+          SP=$(python tools/fetch_sp_token.py) || {
+            echo "static path failed; installing playwright for the browser fallback"
+            pip install --quiet playwright
+            SP=$(python tools/fetch_sp_token.py) || SP=""
+          }
           if [ -n "$SP" ]; then
-            echo "live SP token captured (length ${#SP})"
+            echo "live SP token resolved (length ${#SP})"
             echo "::add-mask::$SP"
             echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
           else
-            echo "SP token capture failed; using the committed fallback"
+            echo "SP token resolution failed; app.py will derive live or use the committed fallback"
           fi
 
       - name: Drip refresh
