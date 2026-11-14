@@ -1,0 +1,161 @@
+name: pandra-b-budget
+
+# Mirror of the private Pandra repository's windows-b-budget.yml (manual
+# Windows B1-B3 measurement driver), running on free public runners so
+# the private repo's Actions minutes stay at zero.  Same contract as the
+# original: workflow_dispatch only, dry-run / formal-measurement /
+# smoke-test purposes are distinct, evidence is published as a workflow
+# artifact only, nothing is committed to any repository.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Pandra ref to measure (SHA or branch; empty = main)'
+        required: false
+        default: ''
+      purpose:
+        description: 'Pre-registered purpose of this run (dry-run or formal measurement)'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - dry-run
+          - formal-measurement
+          - smoke-test
+      combinations:
+        description: 'Browser-layer subset for staged dry-runs (comma list, substring match; all = every combination)'
+        required: false
+        default: 'all'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pandra-b-budget
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PANDRA_REF: ${{ github.event.inputs.ref || 'main' }}
+    steps:
+      - name: Clone Pandra at ${{ env.PANDRA_REF }} (read-only deploy key)
+        env:
+          PANDRA_DEPLOY_KEY: ${{ secrets.PANDRA_DEPLOY_KEY }}
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$PANDRA_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          REF="${{ env.PANDRA_REF }}"
+          if [ "$REF" = "main" ]; then
+            git clone --quiet --depth 1 git@github.com:imu31465/Pandra.git src
+          else
+            git init src
+            git -C src fetch --depth 1 git@github.com:imu31465/Pandra.git "$REF"
+            git -C src checkout -q FETCH_HEAD
+          fi
+          git -C src log -1 --oneline
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.2'
+
+      - name: Record environment
+        shell: pwsh
+        working-directory: src
+        run: |
+          New-Item -ItemType Directory -Force -Path windows-b-budget | Out-Null
+          $lines = @(
+            "runner: $([Environment]::OSVersion.VersionString)",
+            "pandra ref: $env:PANDRA_REF",
+            "purpose: ${{ github.event.inputs.purpose }}",
+            "python: $(python --version)",
+            "node: $(node --version)"
+          )
+          $lines | Set-Content windows-b-budget/environment.txt
+
+      - name: Restore tool dependencies
+        run: npm ci --no-fund --no-audit
+        working-directory: src/tool
+
+      - name: Restore M6 browser automation deps (playwright-core, lockfile)
+        run: npm ci --no-fund --no-audit
+        working-directory: src/m0/harness/m6_browser_automation
+
+      - name: Restore B1 minifier deps (esbuild from m0/tools lockfile)
+        run: npm ci --no-fund --no-audit
+        working-directory: src/m0/tools
+
+      - name: Run the automated B1-B3 measurement driver
+        shell: pwsh
+        working-directory: src
+        run: |
+          $comboArgs = if ('${{ github.event.inputs.combinations }}' -and '${{ github.event.inputs.combinations }}' -ne 'all') { '--combinations','${{ github.event.inputs.combinations }}' } else { '--combinations','all' }
+          python scripts/windows_b_budget_auto.py --purpose ${{ github.event.inputs.purpose }} @comboArgs --out windows-b-budget/b_budget_windows_result.json
+
+      - name: Build the evidence allowlist (profiles and credentials stay on the runner)
+        if: always()
+        shell: pwsh
+        working-directory: src
+        run: |
+          $src = 'windows-b-budget'
+          $dst = 'windows-b-budget-evidence'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $rootItems = @(
+            'b_budget_windows_result.json',
+            'layer-result.json',
+            'layer-manifest.json',
+            'environment.txt',
+            'b_budget_build_report.json'
+          )
+          foreach ($item in $rootItems) {
+            if (Test-Path (Join-Path $src $item)) {
+              Copy-Item (Join-Path $src $item) -Destination $dst
+            }
+          }
+          if (Test-Path (Join-Path $src 'managers')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $dst 'managers') | Out-Null
+            Get-ChildItem (Join-Path $src 'managers') -File | ForEach-Object {
+              Copy-Item $_.FullName -Destination (Join-Path $dst 'managers')
+            }
+          }
+          if (Test-Path (Join-Path $src 'profiles')) {
+            Get-ChildItem (Join-Path $src 'profiles') -Directory | ForEach-Object {
+              $combo = $_.Name
+              Get-ChildItem $_.FullName -Directory | ForEach-Object {
+                $session = $_.Name
+                $ext = Join-Path $_.FullName 'extensions.json'
+                if (Test-Path $ext) {
+                  $target = Join-Path $dst ("profiles/$combo/$session")
+                  New-Item -ItemType Directory -Force -Path $target | Out-Null
+                  Copy-Item $ext -Destination $target
+                }
+              }
+            }
+          }
+          if (Test-Path (Join-Path $src 'builds')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $dst 'builds') | Out-Null
+            Get-ChildItem (Join-Path $src 'builds') -File | ForEach-Object {
+              Copy-Item $_.FullName -Destination (Join-Path $dst 'builds')
+            }
+          }
+          Get-ChildItem $dst -Recurse -File | ForEach-Object {
+            Write-Host "evidence: $($_.FullName.Substring((Get-Location).Path.Length + 1)) ($($_.Length) bytes)"
+          }
+
+      - name: Upload the raw measurement artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pandra-windows-b-budget
+          path: src/windows-b-budget-evidence/
+          retention-days: 90
