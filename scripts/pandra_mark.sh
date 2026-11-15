@@ -19,8 +19,18 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 git -C "$work" init -q
-git -C "$work" fetch -q --depth 1 "$remote" pandra-tested
-git -C "$work" checkout -q FETCH_HEAD
+if git -C "$work" fetch -q --depth 1 "$remote" pandra-tested; then
+  git -C "$work" checkout -q FETCH_HEAD
+else
+  # First successful suite run: the ledger branch does not exist yet
+  # (pandra-ci runs 1-4 died exactly here, `couldn't find remote ref`).
+  # Start it from scratch - an orphan commit whose only file is the
+  # freshly appended tested-shas.txt.
+  echo "(no pandra-tested branch yet — creating the ledger)"
+  git -C "$work" checkout -q --orphan pandra-tested
+  git -C "$work" rm -rqf . 2>/dev/null || true
+  rm -f "$work/tested-shas.txt"
+fi
 git -C "$work" config user.name 'pandra-ci bot'
 git -C "$work" config user.email 'actions@github.com'
 
