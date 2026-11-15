@@ -51,22 +51,24 @@ jobs:
 
       - name: Resolve live SP token (bloxd.io redeploy rotation)
         # The anti-bot 3PSIDMCSP token rotates on bloxd.io client redeploys
-        # (2026-11-14: one bit of the build integer). fetch_sp_token.py now
-        # re-derives it statically from the live JS bundle (no browser) and
-        # validates the candidate by actually minting a session; the
-        # Playwright browser capture only runs when static derivation or its
-        # validation fails. app.py also derives on its own at import, so a
-        # total failure here is survivable - this step mainly pins the token
-        # once per runner for all shards.
+        # (2026-11-14 and again on 2026-11-15). fetch_sp_token.py re-derives
+        # it statically from the live JS bundle (minifier-proof anchors, no
+        # browser) and validates the candidate by actually minting; the
+        # Playwright capture only runs when that fails. app.py also derives
+        # on its own at import, so a total failure here is survivable.
+        # Defensive parsing: even if something ever leaks a second line to
+        # stdout, only the first clean line can enter $SP (runs 100-102
+        # died to a polluted capture writing a multi-line GITHUB_ENV).
         continue-on-error: true
         working-directory: src
         run: |
-          SP=$(python tools/fetch_sp_token.py) || {
-            echo "static path failed; installing playwright for the browser fallback"
+          SP=$(python tools/fetch_sp_token.py | head -n1 | tr -d '[:space:]') || SP=""
+          if [ -z "$SP" ] || [ "${#SP}" -ne 60 ]; then
+            echo "static path unusable; installing playwright for the browser fallback"
             pip install --quiet playwright
-            SP=$(python tools/fetch_sp_token.py) || SP=""
-          }
-          if [ -n "$SP" ]; then
+            SP=$(python tools/fetch_sp_token.py | head -n1 | tr -d '[:space:]') || SP=""
+          fi
+          if [ -n "$SP" ] && [ "${#SP}" -eq 60 ]; then
             echo "live SP token resolved (length ${#SP})"
             echo "::add-mask::$SP"
             echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
@@ -91,7 +93,19 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"content\":\"❌ sweep shard ${{ matrix.shard }} failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            -d '{
+              "embeds": [{
+                "title": "❌ sweep shard '"${{ matrix.shard }}"' failed",
+                "color": 15158332,
+                "fields": [
+                  {"name": "リポジトリ", "value": "'"${GITHUB_REPOSITORY}"'", "inline": true},
+                  {"name": "シャード", "value": "'"${{ matrix.shard }}"'/5", "inline": true},
+                  {"name": "実行ログ", "value": "[run #'"${GITHUB_RUN_NUMBER}"']('"$RUN_URL"')", "inline": true}
+                ],
+                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+              }]
+            }' \
             > /dev/null

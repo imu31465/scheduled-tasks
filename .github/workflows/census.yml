@@ -59,7 +59,18 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"content\":\"❌ census job failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            -d '{
+              "embeds": [{
+                "title": "❌ census job failed",
+                "color": 15158332,
+                "fields": [
+                  {"name": "リポジトリ", "value": "'"${GITHUB_REPOSITORY}"'", "inline": true},
+                  {"name": "実行ログ", "value": "[run #'"${GITHUB_RUN_NUMBER}"']('"$RUN_URL"')", "inline": true}
+                ],
+                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+              }]
+            }' \
             > /dev/null

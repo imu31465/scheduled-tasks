@@ -53,19 +53,21 @@ jobs:
 
       - name: Resolve live SP token (bloxd.io redeploy rotation)
         # Same rationale as sweep.yml: re-derive the anti-bot 3PSIDMCSP
-        # statically from the live JS bundle and validate it by minting;
-        # the Playwright browser capture only runs when that fails. app.py
-        # also derives on its own at import, so a total failure here is
-        # survivable.
+        # statically from the live JS bundle (minifier-proof anchors) and
+        # validate it by minting; the Playwright browser capture only runs
+        # when that fails. app.py also derives on its own at import, so a
+        # total failure here is survivable. head/tr keep $SP to one clean
+        # 60-char line no matter what any library prints.
         continue-on-error: true
         working-directory: src
         run: |
-          SP=$(python tools/fetch_sp_token.py) || {
-            echo "static path failed; installing playwright for the browser fallback"
+          SP=$(python tools/fetch_sp_token.py | head -n1 | tr -d '[:space:]') || SP=""
+          if [ -z "$SP" ] || [ "${#SP}" -ne 60 ]; then
+            echo "static path unusable; installing playwright for the browser fallback"
             pip install --quiet playwright
-            SP=$(python tools/fetch_sp_token.py) || SP=""
-          }
-          if [ -n "$SP" ]; then
+            SP=$(python tools/fetch_sp_token.py | head -n1 | tr -d '[:space:]') || SP=""
+          fi
+          if [ -n "$SP" ] && [ "${#SP}" -eq 60 ]; then
             echo "live SP token resolved (length ${#SP})"
             echo "::add-mask::$SP"
             echo "BLOXD_3PSIDMCSP=$SP" >> "$GITHUB_ENV"
@@ -97,7 +99,18 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"content\":\"❌ enrich job failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            -d '{
+              "embeds": [{
+                "title": "❌ enrich job failed",
+                "color": 15158332,
+                "fields": [
+                  {"name": "リポジトリ", "value": "'"${GITHUB_REPOSITORY}"'", "inline": true},
+                  {"name": "実行ログ", "value": "[run #'"${GITHUB_RUN_NUMBER}"']('"$RUN_URL"')", "inline": true}
+                ],
+                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+              }]
+            }' \
             > /dev/null
