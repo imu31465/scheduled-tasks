@@ -25,10 +25,10 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone --depth 1 --branch runner --filter=blob:none --sparse \\
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
           git -C src rev-parse --short HEAD
