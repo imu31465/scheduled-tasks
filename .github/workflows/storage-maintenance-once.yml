@@ -65,3 +65,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: python tools/run_masked.py tools/prune_expired_meta_attempts.py --apply --batch-size 500
+
+      - name: Dry-run bounded meta compaction
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/vacuum_meta_storage.py
+
+      - name: Reclaim meta relation storage
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/vacuum_meta_storage.py --apply
