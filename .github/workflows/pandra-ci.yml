@@ -84,8 +84,12 @@ jobs:
             echo "count=1" >> "$GITHUB_OUTPUT"
             echo "shas=[\"$sha\"]" >> "$GITHUB_OUTPUT"
             echo 'labels=["manual"]' >> "$GITHUB_OUTPUT"
+            # Linux suite: pinned to ubuntu-24.04 because ubuntu-latest moved
+            # to 26.04 (2026-11-17) and actions/setup-python@v5 has no
+            # 3.12.10 build for 26.04; 24.04 has one. Windows stays on
+            # windows-latest.
             matrix=$(jq -cn --arg s "$sha" \
-              '[{sha:$s,label:"manual",os:"ubuntu-latest",py:"python3"},
+              '[{sha:$s,label:"manual",os:"ubuntu-24.04",py:"python3"},
                 {sha:$s,label:"manual",os:"windows-latest",py:"python"}]')
             echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           else
@@ -93,9 +97,13 @@ jobs:
             # re-read what pandra_detect.sh just appended to $GITHUB_OUTPUT
             shas=$(grep '^shas=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
             labels=$(grep '^labels=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)
+            # Linux suite: pinned to ubuntu-24.04 because ubuntu-latest moved
+            # to 26.04 (2026-11-17) and actions/setup-python@v5 has no
+            # 3.12.10 build for 26.04; 24.04 has one. Windows stays on
+            # windows-latest.
             matrix=$(jq -cn --argjson s "$shas" --argjson l "$labels" \
               '[$s | to_entries[] as $e |
-                 {sha:$e.value,label:$l[$e.key],os:"ubuntu-latest",py:"python3"},
+                 {sha:$e.value,label:$l[$e.key],os:"ubuntu-24.04",py:"python3"},
                  {sha:$e.value,label:$l[$e.key],os:"windows-latest",py:"python"}]')
             echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           fi
