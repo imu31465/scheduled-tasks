@@ -1,0 +1,81 @@
+name: one-time-storage-maintenance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/storage-maintenance-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-time-storage-maintenance-20261117
+  cancel-in-progress: false
+
+jobs:
+  maintenance:
+    if: startsWith(github.event.head_commit.message, 'RUN_STORAGE_MAINTENANCE-20261117')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Clone private maintenance tools from runner branch
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
+            git@github.com:imu31465/bloxd-player-search.git src
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src rev-parse --short HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/requirements.txt
+
+      - name: Install dependencies
+        working-directory: src
+        run: pip install -r requirements.txt
+
+      - name: Dry-run name backfill and expired-marker cleanup
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python tools/run_masked.py tools/migrate_name_compression.py
+          python tools/run_masked.py tools/prune_expired_meta_attempts.py
+
+      - name: Apply reversible name compression
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/migrate_name_compression.py --apply --batch-size 500
+
+      - name: Apply expired marker cleanup
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/prune_expired_meta_attempts.py --apply --batch-size 500
+
+      - name: Dry-run bounded meta compaction
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/vacuum_meta_storage.py
+
+      - name: Reclaim meta relation storage
+        working-directory: src
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tools/run_masked.py tools/vacuum_meta_storage.py --apply
