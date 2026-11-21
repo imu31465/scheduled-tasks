@@ -22,6 +22,20 @@ source at runtime using project-specific read-only deploy keys.
 - These workflows use the Player Search deploy key and Neon credentials, and
   have project-specific concurrency groups.
 
+## Player Search storage migration (prepared, not activated)
+
+A separate change is being prepared to move Player Search from one full Neon Free project to four free projects using a stable 64-bucket map. The change adds these expected repository secrets to the census, enrich, sweep, and name-scan jobs:
+
+- `SHARD_01_DATABASE_URL`: direct secret for the shard-01 control database; must exactly match the shard-01 value in the JSON below.
+- `SHARD_DATABASE_URLS`: JSON object containing all four Neon PostgreSQL connection strings.
+- `SHARD_BUCKET_MAP`: JSON array of exactly 64 shard names.
+
+The original `DATABASE_URL` secret is left untouched. The workflows in this branch use only the new names, so missing secrets fail rather than silently writing to the old database or to one shard only.
+
+**Do not merge this branch or add the new secrets until the private source repository has been updated on its `runner` branch, the initial data copy to all four projects has passed per-bucket verification, and the Altare reader has been deployed and tested.** Current `main` workflows and schedules are unchanged. The change is prepared on `feature/neon-free-sharding` only.
+
+The 64 storage buckets are separate from the census workflow's four ID-range workers and the sweep workflow's five execution workers. Every writer must use the same player-ID-to-storage-bucket mapping.
+
 ## Isolation
 
 Pandra and Player Search workflows execute independently; sharing this
