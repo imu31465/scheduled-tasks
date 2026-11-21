@@ -32,10 +32,10 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone --depth 1 --branch runner --filter=blob:none --sparse \\
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
@@ -48,6 +48,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
+      - name: Validate runner code and shard partitioning
+        working-directory: src
+        run: |
+          python -m py_compile tools/update_frontier.py tools/bloxd_census.py tools/run_masked.py
+          python - <<'PY'
+          from tools.update_frontier import split_scan_range
+          for lo, hi, count in ((1, 40_000, 4), (2_823_346, 2_863_345, 4), (9, 19, 3)):
+              shards = split_scan_range(lo, hi, count)
+              assert shards[0]["min_id"] == lo
+              assert shards[-1]["max_id"] == hi
+              assert sum(s["max_id"] - s["min_id"] + 1 for s in shards) == hi - lo + 1
+          print("shard partition checks passed")
+          PY
+
       - name: Snapshot moving frontier and create shard plan
         id: plan
         env:
@@ -57,7 +71,7 @@ jobs:
         working-directory: src
         run: |
           WINDOW="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.window || '0' }}"
-          python tools/run_masked.py tools/update_frontier.py \\
+          python tools/run_masked.py tools/update_frontier.py \
             --plan-only --window "$WINDOW" --shards "$SHARD_COUNT" --plan-out scan-plan.json
           python -c "import json; print('shards=' + json.dumps(list(range(int('$SHARD_COUNT')))))" >> "$GITHUB_OUTPUT"
 
@@ -84,10 +98,10 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone --depth 1 --branch runner --filter=blob:none --sparse \\
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
@@ -109,8 +123,8 @@ jobs:
       - name: Scan assigned ID range
         working-directory: src
         run: |
-          python tools/run_masked.py tools/update_frontier.py \\
-            --scan-only --plan-file scan-plan.json --shard-index "${{ matrix.shard }}" \\
+          python tools/run_masked.py tools/update_frontier.py \
+            --scan-only --plan-file scan-plan.json --shard-index "${{ matrix.shard }}" \
             --workers 8 --out "census-shard-${{ matrix.shard }}.json"
 
       - name: Upload completed shard
@@ -131,10 +145,10 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone --depth 1 --branch runner --filter=blob:none --sparse \\
+          git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
@@ -167,7 +181,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         working-directory: src
         run: |
-          python tools/run_masked.py tools/update_frontier.py \\
+          python tools/run_masked.py tools/update_frontier.py \
             --finalize --plan-file scan-plan.json --results-dir scan-results
 
   notify-failure:
@@ -181,16 +195,9 @@ jobs:
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \\
-            -H "Content-Type: application/json" \\
-            -d '{
-              "embeds": [{
-                "title": "❌ census job failed",
-                "color": 15158332,
-                "fields": [
-                  {"name": "リポジトリ", "value": "'"${GITHUB_REPOSITORY}"'", "inline": true},
-                  {"name": "実行ログ", "value": "[run #'"\${GITHUB_RUN_NUMBER}"']('"\$RUN_URL"')", "inline": true}
-                ],
-                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
-              }]
-            }' > /dev/null
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD=$(printf '{"embeds":[{"title":"❌ census job failed","color":15158332,"fields":[{"name":"リポジトリ","value":"%s","inline":true},{"name":"実行ログ","value":"[run #%s](%s)","inline":true}],"timestamp":"%s"}]}' \
+            "$GITHUB_REPOSITORY" "$GITHUB_RUN_NUMBER" "$RUN_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" > /dev/null
