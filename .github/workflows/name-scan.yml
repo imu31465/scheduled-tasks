@@ -25,7 +25,7 @@ jobs:
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt'
 
       - uses: actions/setup-python@v5
         with:
@@ -38,7 +38,9 @@ jobs:
 
       - name: Scan 4-char name availability
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SHARD_01_DATABASE_URL }}
+          SHARD_DATABASE_URLS: ${{ secrets.SHARD_DATABASE_URLS }}
+          SHARD_BUCKET_MAP: ${{ secrets.SHARD_BUCKET_MAP }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
         working-directory: src
