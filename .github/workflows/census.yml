@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
+      plan: ${{ steps.plan.outputs.plan }}
     steps:
       - name: Clone task sources (read-only deploy key)
         env:
@@ -73,15 +74,7 @@ jobs:
           WINDOW="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.window || '0' }}"
           python tools/run_masked.py tools/update_frontier.py \
             --plan-only --window "$WINDOW" --shards "$SHARD_COUNT" --plan-out scan-plan.json
-          python -c "import json; print('shards=' + json.dumps(list(range(int('$SHARD_COUNT')))))" >> "$GITHUB_OUTPUT"
-
-      - name: Upload immutable scan plan
-        uses: actions/upload-artifact@v4
-        with:
-          name: census-plan
-          path: src/scan-plan.json
-          if-no-files-found: error
-          retention-days: 1
+          python -c "import json; print('plan=' + json.dumps(json.load(open('scan-plan.json')), separators=(',', ':')))" >> "$GITHUB_OUTPUT"
 
   scan:
     needs: prepare
@@ -114,26 +107,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
-      - name: Download immutable scan plan
-        uses: actions/download-artifact@v4
-        with:
-          name: census-plan
-          path: src/
-
-      - name: Scan assigned ID range
+      - name: Scan and store assigned ID range in Neon
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+          SCAN_PLAN: ${{ needs.prepare.outputs.plan }}
+          CENSUS_RUN_ID: ${{ github.run_id }}
         working-directory: src
         run: |
+          printf '%s' "$SCAN_PLAN" > scan-plan.json
           python tools/run_masked.py tools/update_frontier.py \
-            --scan-only --plan-file scan-plan.json --shard-index "${{ matrix.shard }}" \
-            --workers 8 --out "census-shard-${{ matrix.shard }}.json"
-
-      - name: Upload completed shard
-        uses: actions/upload-artifact@v4
-        with:
-          name: census-shard-${{ matrix.shard }}
-          path: src/census-shard-${{ matrix.shard }}.json
-          if-no-files-found: error
-          retention-days: 1
+            --store-shard --plan-file scan-plan.json --shard-index "${{ matrix.shard }}" \
+            --run-id "$CENSUS_RUN_ID" --workers 8 \
+            --out "census-shard-${{ matrix.shard }}.json"
 
   finalize:
     needs: [prepare, scan]
@@ -161,28 +147,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r src/requirements.txt
 
-      - name: Download scan plan
-        uses: actions/download-artifact@v4
-        with:
-          name: census-plan
-          path: src/
-
-      - name: Download all completed shards
-        uses: actions/download-artifact@v4
-        with:
-          pattern: census-shard-*
-          path: src/scan-results
-          merge-multiple: true
-
-      - name: Validate, merge, and commit once
+      - name: Validate DB receipts and advance frontier
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
+          SCAN_PLAN: ${{ needs.prepare.outputs.plan }}
+          CENSUS_RUN_ID: ${{ github.run_id }}
         working-directory: src
         run: |
+          printf '%s' "$SCAN_PLAN" > scan-plan.json
           python tools/run_masked.py tools/update_frontier.py \
-            --finalize --plan-file scan-plan.json --results-dir scan-results
+            --finalize --plan-file scan-plan.json --run-id "$CENSUS_RUN_ID"
 
   notify-failure:
     if: ${{ failure() }}
@@ -194,7 +170,6 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then exit 0; fi
-          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           PAYLOAD=$(printf '{"embeds":[{"title":"❌ census job failed","color":15158332,"fields":[{"name":"リポジトリ","value":"%s","inline":true},{"name":"実行ログ","value":"[run #%s](%s)","inline":true}],"timestamp":"%s"}]}' \
             "$GITHUB_REPOSITORY" "$GITHUB_RUN_NUMBER" "$RUN_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
