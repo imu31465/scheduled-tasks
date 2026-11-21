@@ -36,3 +36,21 @@ their project's workflow. A future split into dedicated Pandra and Player
 Search runner repositories is appropriate if stronger secret/permission
 isolation is needed; migrate repository secrets before disabling any of the
 current workflows.
+
+
+## Player Search runner split (staged)
+
+The dedicated public runner repository is now
+[`bloxd-player-search-tasks`](https://github.com/imu31465/bloxd-player-search-tasks).
+Its four Player Search workflows have been copied there with a fail-closed
+`PLAYER_SEARCH_SHARD_CUTOVER=ready` job gate. The new workflows are inert
+until that repository variable is explicitly set.
+
+The existing Player Search schedules in this repository remain active as the
+rollback/source-of-truth path while the Neon migration and Altare reader are
+being verified. Do not delete or disable these workflows until the new
+repository has its secrets configured, the shard-aware source `runner` branch
+is accepted, the data migration reports `VERIFICATION PASSED`, the Altare
+reader is checked, and a manual run in the new repository succeeds. After
+cutover, remove only the Player Search workflows from this repository; keep
+Pandra workflows and `PANDRA_DEPLOY_KEY` here.
