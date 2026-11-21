@@ -46,11 +46,13 @@ Its four Player Search workflows have been copied there with a fail-closed
 `PLAYER_SEARCH_SHARD_CUTOVER=ready` job gate. The new workflows are inert
 until that repository variable is explicitly set.
 
-The existing Player Search schedules in this repository remain active as the
-rollback/source-of-truth path while the Neon migration and Altare reader are
-being verified. Do not delete or disable these workflows until the new
-repository has its secrets configured, the shard-aware source `runner` branch
-is accepted, the data migration reports `VERIFICATION PASSED`, the Altare
-reader is checked, and a manual run in the new repository succeeds. After
+The existing Player Search workflow files in this repository remain unchanged
+as the rollback path while the Neon migration and Altare reader are being
+verified. Their latest observed scheduled runs should be checked in Actions;
+this note does not claim that every schedule is currently firing. Do not delete
+or disable these workflows until the new repository has its secrets configured,
+the shard-aware source `runner` branch is accepted, the data migration reports
+`VERIFICATION PASSED`, the Altare reader is checked, and a manual run in the
+new repository succeeds. After
 cutover, remove only the Player Search workflows from this repository; keep
 Pandra workflows and `PANDRA_DEPLOY_KEY` here.
