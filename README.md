@@ -36,6 +36,10 @@ The original `DATABASE_URL` secret is left untouched. The workflows in this bran
 
 The 64 storage buckets are separate from the census workflow's four ID-range workers and the sweep workflow's five execution workers. Every writer must use the same player-ID-to-storage-bucket mapping.
 
+## PR review status
+
+The sharding workflow changes are staged in [Draft PR #4](https://github.com/imu31465/scheduled-tasks/pull/4) and are not merged or active. Current production schedules remain unchanged. The private Player Search runner branch has not yet received the matching writer code; the new secrets are not set. Do not activate these workflows until the initial data copy and Altare reader have passed verification.
+
 ## Isolation
 
 Pandra and Player Search workflows execute independently; sharing this
