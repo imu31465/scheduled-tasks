@@ -10,9 +10,9 @@ on:
         required: false
         default: "0"
 
-# A run snapshots the current DB frontier, scans one bounded range in parallel,
-# then merges and writes once. Never let two census plans mutate the frontier
-# concurrently; later scheduled runs start from the newly committed max ID.
+# A run snapshots the saved census cursor, then fans one bounded range out to
+# four independent runners. Each writes its disjoint shard to Neon; only the
+# finalizer advances the shared cursor. Never overlap census plans.
 concurrency:
   group: census
   cancel-in-progress: false
