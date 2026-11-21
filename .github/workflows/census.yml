@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       window:
-        description: "IDs to probe past the current DB max (0 = adaptive, max 40,000 per run)"
+        description: "IDs to probe past the saved census cursor (0 = adaptive, max 40,000 per run)"
         required: false
         default: "0"
 
@@ -75,6 +75,7 @@ jobs:
           python tools/run_masked.py tools/update_frontier.py \
             --plan-only --window "$WINDOW" --shards "$SHARD_COUNT" --plan-out scan-plan.json
           python -c "import json; print('plan=' + json.dumps(json.load(open('scan-plan.json')), separators=(',', ':')))" >> "$GITHUB_OUTPUT"
+          echo "shards=[$(seq -s, 0 $((SHARD_COUNT - 1)))]" >> "$GITHUB_OUTPUT"
 
   scan:
     needs: prepare
