@@ -43,7 +43,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -71,7 +71,9 @@ jobs:
       - name: Snapshot moving frontier and create shard plan
         id: plan
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SHARD_01_DATABASE_URL }}
+          SHARD_DATABASE_URLS: ${{ secrets.SHARD_DATABASE_URLS }}
+          SHARD_BUCKET_MAP: ${{ secrets.SHARD_BUCKET_MAP }}
           PYTHONDONTWRITEBYTECODE: "1"
           SHARD_COUNT: "4"
         working-directory: src
@@ -109,7 +111,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -122,7 +124,9 @@ jobs:
 
       - name: Scan and store assigned ID range in Neon
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SHARD_01_DATABASE_URL }}
+          SHARD_DATABASE_URLS: ${{ secrets.SHARD_DATABASE_URLS }}
+          SHARD_BUCKET_MAP: ${{ secrets.SHARD_BUCKET_MAP }}
           PYTHONDONTWRITEBYTECODE: "1"
           SCAN_PLAN: ${{ needs.prepare.outputs.plan }}
           CENSUS_RUN_ID: ${{ github.run_id }}
@@ -155,7 +159,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -168,7 +172,9 @@ jobs:
 
       - name: Validate DB receipts and advance frontier
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SHARD_01_DATABASE_URL }}
+          SHARD_DATABASE_URLS: ${{ secrets.SHARD_DATABASE_URLS }}
+          SHARD_BUCKET_MAP: ${{ secrets.SHARD_BUCKET_MAP }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PYTHONDONTWRITEBYTECODE: "1"
           SCAN_PLAN: ${{ needs.prepare.outputs.plan }}
