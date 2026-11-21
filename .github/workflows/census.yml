@@ -27,6 +27,7 @@ jobs:
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
       plan: ${{ steps.plan.outputs.plan }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
     steps:
       - name: Clone task sources (read-only deploy key)
         env:
@@ -38,6 +39,10 @@ jobs:
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
+          if [ -n "${SOURCE_SHA:-}" ]; then
+            git -C src fetch --depth 1 origin "$SOURCE_SHA"
+            git -C src checkout --detach "$SOURCE_SHA"
+          fi
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
@@ -76,10 +81,13 @@ jobs:
             --plan-only --window "$WINDOW" --shards "$SHARD_COUNT" --plan-out scan-plan.json
           python -c "import json; print('plan=' + json.dumps(json.load(open('scan-plan.json')), separators=(',', ':')))" >> "$GITHUB_OUTPUT"
           echo "shards=[$(seq -s, 0 $((SHARD_COUNT - 1)))]" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   scan:
     needs: prepare
     runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -97,6 +105,10 @@ jobs:
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
+          if [ -n "${SOURCE_SHA:-}" ]; then
+            git -C src fetch --depth 1 origin "$SOURCE_SHA"
+            git -C src checkout --detach "$SOURCE_SHA"
+          fi
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
@@ -125,6 +137,8 @@ jobs:
   finalize:
     needs: [prepare, scan]
     runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
     timeout-minutes: 15
     steps:
       - name: Clone task sources (read-only deploy key)
@@ -137,6 +151,10 @@ jobs:
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone --depth 1 --branch runner --filter=blob:none --sparse \
             git@github.com:imu31465/bloxd-player-search.git src
+          if [ -n "${SOURCE_SHA:-}" ]; then
+            git -C src fetch --depth 1 origin "$SOURCE_SHA"
+            git -C src checkout --detach "$SOURCE_SHA"
+          fi
           git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
