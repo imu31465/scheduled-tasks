@@ -1,11 +1,6 @@
 name: census
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/census.yml"
   schedule:
     - cron: "17,47 * * * *"
   workflow_dispatch:
