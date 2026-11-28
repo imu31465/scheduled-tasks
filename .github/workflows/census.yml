@@ -43,7 +43,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -109,7 +109,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -155,7 +155,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
