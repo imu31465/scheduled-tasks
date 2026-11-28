@@ -48,7 +48,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/tests/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -64,6 +64,7 @@ jobs:
         run: |
           python -m py_compile tools/update_frontier.py tools/bloxd_census.py tools/run_masked.py
           python -c "import sharding; print('sharding module import passed')"
+          python tests/test_frontier_progress.py
           python - <<'PY'
           from tools.update_frontier import split_scan_range
           for lo, hi, count in ((1, 40_000, 4), (2_823_346, 2_863_345, 4), (9, 19, 3)):
@@ -115,7 +116,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/tests/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
@@ -161,7 +162,7 @@ jobs:
             git -C src fetch --depth 1 origin "$SOURCE_SHA"
             git -C src checkout --detach "$SOURCE_SHA"
           fi
-          git -C src sparse-checkout set --no-cone '/tools/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
+          git -C src sparse-checkout set --no-cone '/tools/' '/tests/' '/app.py' '/sharding.py' '/requirements.txt' '/cosmetics_codec.py' '/cosmetics_dictionary.json'
 
       - uses: actions/setup-python@v5
         with:
